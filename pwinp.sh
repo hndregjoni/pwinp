@@ -13,6 +13,8 @@ get_help() {
     - u: Up
     - d: Down
     - /[clrud]{2}/: Screen corners
+  o - Set window opacity:
+    - [+-]number : Add opacity percentage
 EOF
 }
 
@@ -45,11 +47,13 @@ get_pos() {
 }
 
 ID=""
-P=c
+P=""
 G=20
 T=""
 
-while getopts "h?i:p:g:t" opt; do
+O=""
+
+while getopts "h?i:p:g:to:" opt; do
   case $opt in
   h|\?)
     get_help
@@ -65,6 +69,9 @@ while getopts "h?i:p:g:t" opt; do
     ;;
   t)
     T=1
+    ;;
+  o)
+    O=$OPTARG
     ;;
   esac
 done
@@ -93,16 +100,47 @@ dheight=`echo $dinfo | cut -d " " -f2`
 newx=$wx
 newy=$wy
 
-[[ $P =~ c ]] && get_pos c
+if [ ! -z "$P" ]; then
 
-[[ $P =~ u ]] && get_pos u
-[[ $P =~ r ]] && get_pos r
-[[ $P =~ d ]] && get_pos d
-[[ $P =~ l ]] && get_pos l
+  [[ $P =~ c ]] && get_pos c
 
-if [ ! -z "$newx" ] && [ ! -z "$newy" ]; then
-  
-  # echo $newx $newy
+  [[ $P =~ u ]] && get_pos u
+  [[ $P =~ r ]] && get_pos r
+  [[ $P =~ d ]] && get_pos d
+  [[ $P =~ l ]] && get_pos l
 
-  xdotool windowmove $ID $newx $newy
+  if [ ! -z "$newx" ] && [ ! -z "$newy" ]; then
+    
+    # echo $newx $newy
+
+    xdotool windowmove $ID $newx $newy
+  fi
+
+fi
+
+if [ ! -z "$O" ]; then
+  OPACITY=`echo "$O" | sed -n -r "s/[+-]?([0-9]*)/\1/p"`
+  OPERATOR=`echo "$O" | sed -n -r "s/([+-])[0-9]*/\1/p"`
+
+  let OPACITY=0xffffffff*$OPACITY/100
+
+  # echo Delta Opacity: $OPACITY
+
+  # echo Operator: $OPERATOR
+
+  if [ ! -z "$OPERATOR" ]; then
+    CURRENT_OPACITY=`xprop -id $ID | sed -n -r "s/^_NET_WM_WINDOW_OPACITY.*= ([0-9]*)/\1/p"`
+    [ -z "$CURRENT_OPACITY" ] && CURRENT_OPACITY=$((0xffffffff))
+
+    # echo Current Opacity $CURRENT_OPACITY
+
+    let FINAL_OPACITY=$CURRENT_OPACITY${OPERATOR}$OPACITY
+  else
+    FINAL_OPACITY=$OPACITY
+  fi
+
+  FINAL_OPACITY=$(( $FINAL_OPACITY < 0 ? 0 : $FINAL_OPACITY ))
+  FINAL_OPACITY=$(( $FINAL_OPACITY > 0xffffffff ? 0xffffffff : $FINAL_OPACITY ))
+
+  xprop -id $ID -f _NET_WM_WINDOW_OPACITY 32c -set _NET_WM_WINDOW_OPACITY $FINAL_OPACITY
 fi
